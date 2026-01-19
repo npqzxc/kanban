@@ -1,0 +1,49 @@
+name: Docker Build Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build backend image
+      run: docker build -t kanban-backend ./backend
+
+    - name: Build frontend image
+      run: docker build -t kanban-frontend ./frontend
+
+    - name: Start services
+      run: |
+        docker compose up -d
+        sleep 30
+
+    - name: Check services health
+      run: |
+        docker compose ps
+        curl -f http://localhost:8080/health || exit 1
+        curl -f http://localhost:3000 || exit 1
+
+    - name: Run API tests
+      run: |
+        # Test GET /api/tasks
+        curl -f http://localhost:8080/api/tasks
+
+        # Test POST /api/tasks
+        curl -X POST -H "Content-Type: application/json" \
+          -d '{"title":"Test Task","description":"Testing","status":"todo"}' \
+          http://localhost:8080/api/tasks
+
+    - name: Stop services
+      if: always()
+      run: docker compose down -v
